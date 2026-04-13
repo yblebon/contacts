@@ -661,6 +661,13 @@
                     </svg>
                     Export
                 </button>
+                <button class="btn btn-secondary" id="exportVcfBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                        <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                    Export VCF
+                </button>
                 <button class="btn btn-secondary" id="lockBtn">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -927,6 +934,39 @@
         </div>
     </div>
 
+    <!-- VCF Export Password Modal -->
+    <div class="modal-overlay" id="vcfExportModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Export as VCF</h3>
+                <button class="modal-close" onclick="closeVcfExportModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                        <path d="M18 6 6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <p style="color: var(--text-secondary); margin-bottom: 0.5rem;">Note: The VCF file will NOT be encrypted. Enter your vault password to confirm.</p>
+            <form id="vcfExportForm">
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <input type="password" id="vcfPasswordInput" placeholder="Enter vault password" required>
+                        <button type="button" class="toggle-password" onclick="togglePasswordVisibility('vcfPasswordInput')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="error-message" id="vcfExportError"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeVcfExportModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Download VCF</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <input type="file" id="fileInput" class="file-input" accept=".json">
     <input type="file" id="backupFileInput" class="file-input" accept=".json">
 
@@ -992,6 +1032,92 @@
             document.getElementById('fileInput').addEventListener('change', handleFileSelect);
             document.getElementById('backupFileInput').addEventListener('change', handleBackupFileSelect);
             document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
+            document.getElementById('exportVcfBtn').addEventListener('click', openVcfExportModal);
+            document.getElementById('vcfExportForm').addEventListener('submit', handleVcfExport);
+        }
+
+        // VCF Export
+        function openVcfExportModal() {
+            if (contacts.length === 0) {
+                alert('No contacts to export');
+                return;
+            }
+            document.getElementById('vcfExportModal').classList.add('active');
+            document.getElementById('vcfPasswordInput').value = '';
+            document.getElementById('vcfExportError').textContent = '';
+        }
+
+        function closeVcfExportModal() {
+            document.getElementById('vcfExportModal').classList.remove('active');
+        }
+
+        async function handleVcfExport(e) {
+            e.preventDefault();
+            const password = document.getElementById('vcfPasswordInput').value;
+
+            if (password !== currentPassword) {
+                document.getElementById('vcfExportError').textContent = 'Incorrect password';
+                return;
+            }
+
+            const vcfContent = generateVcf(contacts);
+            const blob = new Blob([vcfContent], { type: 'text/vcard;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = new Date().toISOString().split('T')[0];
+            a.download = `contacts-${APP_VERSION}-${date}.vcf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            closeVcfExportModal();
+        }
+
+        function generateVcf(contacts) {
+            const lines = [];
+            contacts.forEach(contact => {
+                lines.push('BEGIN:VCARD');
+                lines.push('VERSION:3.0');
+
+                // Name
+                const nameParts = contact.name.split(' ');
+                const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+                const firstName = nameParts[0] || '';
+                lines.push(`FN:${escapeVcf(contact.name)}`);
+                lines.push(`N:${escapeVcf(lastName)};${escapeVcf(firstName)};;;`);
+
+                // Phone
+                if (contact.phone) {
+                    lines.push(`TEL;TYPE=CELL:${escapeVcf(contact.phone)}`);
+                }
+
+                // Email
+                if (contact.email) {
+                    lines.push(`EMAIL:${escapeVcf(contact.email)}`);
+                }
+
+                // Address
+                if (contact.address) {
+                    lines.push(`ADR;TYPE=WORK:${escapeVcf(contact.address)}`);
+                }
+
+                // Notes
+                if (contact.notes) {
+                    lines.push(`NOTE:${escapeVcf(contact.notes)}`);
+                }
+
+                lines.push('END:VCARD');
+            });
+            return lines.join('\r\n');
+        }
+
+        function escapeVcf(text) {
+            if (!text) return '';
+            return text.replace(/[\\;,\n]/g, (match) => {
+                if (match === '\n') return '\\n';
+                return '\\' + match;
+            });
         }
 
         // Screen navigation
@@ -1430,6 +1556,7 @@
                 closeContactModal();
                 closeConfirmModal();
                 closeImportModal();
+                closeVcfExportModal();
             }
         });
     </script>
