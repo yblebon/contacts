@@ -1189,7 +1189,11 @@
             combined.set(iv, salt.length);
             combined.set(new Uint8Array(encrypted), salt.length + iv.length);
 
-            return btoa(String.fromCharCode(...combined));
+            // Avoid spread operator which throws "Maximum call stack size exceeded"
+            // on large arrays; build the binary string character by character instead.
+            let binary = '';
+            combined.forEach(b => { binary += String.fromCharCode(b); });
+            return btoa(binary);
         }
 
         async function decrypt(encryptedBase64, password) {
@@ -1222,8 +1226,8 @@
 
             lockError.textContent = '';
 
-            if (password.length < 4) {
-                lockError.textContent = 'Password must be at least 4 characters';
+            if (password.length < 12) {
+                lockError.textContent = 'Password must be at least 12 characters';
                 return;
             }
             if (password !== confirmPassword) {
@@ -1388,12 +1392,6 @@
             contacts = contacts.filter(c => c.id !== deleteContactId);
             await saveContacts();
             closeConfirmModal();
-            renderContacts();
-        }
-
-        async function removeContact(id) {
-            contacts = contacts.filter(c => c.id !== id);
-            await saveContacts();
             renderContacts();
         }
 
